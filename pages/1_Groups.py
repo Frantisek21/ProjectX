@@ -1,6 +1,6 @@
 import streamlit as st
-from db import init_db, add_person, create_group, get_all_people, get_all_groups, get_group_members
-from utils import show_sidebar, apply_theme
+from db import init_db, add_person, create_group, get_all_people, get_all_groups, get_group_members, get_all_people_map
+from utils import show_sidebar, apply_theme, avatar_html, DEFAULT_COLOR
 
 init_db()
 
@@ -63,7 +63,18 @@ groups = get_all_groups()
 if not groups:
     st.info("No groups yet.")
 else:
+    people_map = get_all_people_map()
     for group in groups:
         members = get_group_members(group["id"])
-        member_names = ", ".join(m["name"] for m in members) or "No members"
-        st.markdown(f"**{group['name']}** — {member_names}")
+        st.markdown(f"**{group['name']}**")
+        if members:
+            row = " &nbsp; ".join(
+                avatar_html(m["name"], people_map.get(m["id"], {}).get("color", DEFAULT_COLOR),
+                            people_map.get(m["id"], {}).get("pfp"), size=26)
+                + f" {m['name']}"
+                for m in members
+            )
+            st.markdown(row, unsafe_allow_html=True)
+        else:
+            st.caption("No members")
+        st.markdown("")

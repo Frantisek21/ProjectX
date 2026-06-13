@@ -79,6 +79,12 @@ def get_all_people():
         return conn.execute("SELECT * FROM people ORDER BY name").fetchall()
 
 
+def get_all_people_map() -> dict:
+    with get_conn() as conn:
+        rows = conn.execute("SELECT id, name, color, pfp FROM people").fetchall()
+    return {r["id"]: dict(r) for r in rows}
+
+
 def get_person(person_id: int):
     with get_conn() as conn:
         return conn.execute("SELECT * FROM people WHERE id = ?", (person_id,)).fetchone()
@@ -195,8 +201,7 @@ def get_balances(group_id: int):
         if debtor_id != creditor_id:
             owes[debtor_id][creditor_id] += row["amount"]
 
-    # Resolve names
-    people_map = {p["id"]: p["name"] for p in get_all_people()}
+    all_people = get_all_people_map()
 
     results = []
     seen = set()
@@ -209,14 +214,18 @@ def get_balances(group_id: int):
             net = owes[debtor_id][creditor_id] - owes[creditor_id].get(debtor_id, 0)
             if net > 0.005:
                 results.append({
-                    "debtor": people_map[debtor_id],
-                    "creditor": people_map[creditor_id],
+                    "debtor_id": debtor_id,
+                    "debtor": all_people[debtor_id]["name"],
+                    "creditor_id": creditor_id,
+                    "creditor": all_people[creditor_id]["name"],
                     "amount": round(net, 2),
                 })
             elif net < -0.005:
                 results.append({
-                    "debtor": people_map[creditor_id],
-                    "creditor": people_map[debtor_id],
+                    "debtor_id": creditor_id,
+                    "debtor": all_people[creditor_id]["name"],
+                    "creditor_id": debtor_id,
+                    "creditor": all_people[debtor_id]["name"],
                     "amount": round(-net, 2),
                 })
 
