@@ -1,10 +1,13 @@
 import streamlit as st
 from db import init_db, get_all_groups, get_group_members, add_expense, get_group_expenses
+from utils import show_sidebar, apply_theme
 
 init_db()
 
 st.set_page_config(page_title="Add Expense", page_icon="➕")
-st.title("➕ Add Expense")
+color = show_sidebar()
+apply_theme(color)
+st.title("Add Expense")
 
 groups = get_all_groups()
 

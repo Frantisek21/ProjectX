@@ -15,8 +15,10 @@ def init_db():
     with get_conn() as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS people (
-                id   INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL UNIQUE
+                id    INTEGER PRIMARY KEY AUTOINCREMENT,
+                name  TEXT NOT NULL UNIQUE,
+                color TEXT DEFAULT '#4A90D9',
+                pfp   TEXT
             );
 
             CREATE TABLE IF NOT EXISTS groups (
@@ -46,6 +48,15 @@ def init_db():
                 amount     REAL NOT NULL
             );
         """)
+        # Safe migrations for databases created before these columns existed
+        for migration in [
+            "ALTER TABLE people ADD COLUMN color TEXT DEFAULT '#4A90D9'",
+            "ALTER TABLE people ADD COLUMN pfp TEXT",
+        ]:
+            try:
+                conn.execute(migration)
+            except Exception:
+                pass
 
 
 # --- People ---
@@ -59,6 +70,25 @@ def add_person(name: str) -> int:
 def get_all_people():
     with get_conn() as conn:
         return conn.execute("SELECT * FROM people ORDER BY name").fetchall()
+
+
+def get_person(person_id: int):
+    with get_conn() as conn:
+        return conn.execute("SELECT * FROM people WHERE id = ?", (person_id,)).fetchone()
+
+
+def update_person_profile(person_id: int, color: str, pfp_b64: str | None):
+    with get_conn() as conn:
+        if pfp_b64 is not None:
+            conn.execute(
+                "UPDATE people SET color = ?, pfp = ? WHERE id = ?",
+                (color, pfp_b64, person_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE people SET color = ? WHERE id = ?",
+                (color, person_id),
+            )
 
 
 # --- Groups ---
@@ -144,13 +174,13 @@ def get_balances(group_id: int):
 
     results = []
     seen = set()
-    for debtor_id, creditors in owes.items():
-        for creditor_id, amount in creditors.items():
+    for debtor_id, creditors in list(owes.items()):
+        for creditor_id, amount in list(creditors.items()):
             pair = tuple(sorted([debtor_id, creditor_id]))
             if pair in seen:
                 continue
             seen.add(pair)
-            net = owes[debtor_id][creditor_id] - owes[creditor_id][debtor_id]
+            net = owes[debtor_id][creditor_id] - owes[creditor_id].get(debtor_id, 0)
             if net > 0.005:
                 results.append({
                     "debtor": people_map[debtor_id],

@@ -1,10 +1,13 @@
 import streamlit as st
 from db import init_db, get_all_groups, get_balances
+from utils import show_sidebar, apply_theme
 
 init_db()
 
 st.set_page_config(page_title="Balances", page_icon="⚖️")
-st.title("⚖️ Balances")
+color = show_sidebar()
+apply_theme(color)
+st.title("Balances")
 
 groups = get_all_groups()
 

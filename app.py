@@ -1,11 +1,14 @@
 import streamlit as st
 from db import init_db, get_all_groups, get_group_members
+from utils import show_sidebar, apply_theme
 
 init_db()
 
 st.set_page_config(page_title="SplitEasy", page_icon="💸", layout="centered")
+color = show_sidebar()
+apply_theme(color)
 
-st.title("💸 SplitEasy")
+st.title("SplitEasy")
 st.caption("Track shared expenses and settle up easily.")
 
 st.divider()
