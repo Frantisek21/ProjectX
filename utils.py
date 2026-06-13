@@ -27,6 +27,22 @@ def person_chip(name: str, color: str = DEFAULT_COLOR, pfp_b64: str = None, size
 
 CURRENCIES = ["CZK", "EUR", "USD", "GBP", "PLN"]
 CURRENCY_SYMBOLS = {"CZK": "Kč", "EUR": "€", "USD": "$", "GBP": "£", "PLN": "zł"}
+PREFIX_CURRENCIES = {"EUR", "USD", "GBP"}
+
+
+def fmt_amount(amount: float, symbol: str, currency: str) -> str:
+    if currency in PREFIX_CURRENCIES:
+        return f"{symbol}{amount:,.2f}"
+    return f"{amount:,.2f} {symbol}"
+
+
+def fmt_dt(ts: str) -> str:
+    try:
+        from datetime import datetime
+        dt = datetime.strptime(ts[:16], "%Y-%m-%d %H:%M")
+        return dt.strftime("%-d %b, %I:%M %p").replace(" 0", " ")
+    except Exception:
+        return ts
 
 
 def apply_theme(color: str):
@@ -130,4 +146,5 @@ def show_sidebar() -> dict:
         st.session_state.currency = selected_currency
 
     currency_symbol = CURRENCY_SYMBOLS[selected_currency]
-    return {"color": color, "currency": selected_currency, "symbol": currency_symbol}
+    return {"color": color, "currency": selected_currency, "symbol": currency_symbol,
+            "fmt": lambda amt: fmt_amount(amt, currency_symbol, selected_currency)}

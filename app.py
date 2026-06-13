@@ -4,14 +4,16 @@ from db import (
     add_expense, get_group_expenses, set_expense_settled,
     update_expense, delete_expense, get_expense_splits, get_balances,
 )
-from utils import show_sidebar, apply_theme, avatar_html, person_chip, DEFAULT_COLOR
+from utils import show_sidebar, apply_theme, avatar_html, person_chip, DEFAULT_COLOR, fmt_dt
 
 init_db()
 
-st.set_page_config(page_title="SplitEasy", page_icon="💸", layout="centered")
+st.set_page_config(page_title="SplitEasy — Home", page_icon="💸", layout="centered")
 info = show_sidebar()
 apply_theme(info["color"])
 symbol = info["symbol"]
+currency = info["currency"]
+fmt = info["fmt"]
 
 groups = get_all_groups()
 
@@ -25,6 +27,7 @@ group = next((g for g in groups if g["id"] == active_id), groups[0])
 members = get_group_members(group["id"])
 people_map = get_all_people_map()
 name_to_id = {m["name"]: m["id"] for m in members}
+editing_id = st.session_state.get("editing_expense_id")
 
 # ── Group header ───────────────────────────────────────────────────────────────
 st.title(group["name"])
@@ -40,46 +43,51 @@ st.markdown(f'<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:cente
 st.divider()
 
 # ── Add Expense ────────────────────────────────────────────────────────────────
-with st.expander("Add new expense", expanded=False):
-    if len(members) < 2:
-        st.warning("This group needs at least 2 members.")
-    else:
-        with st.form("add_expense_form", clear_on_submit=True):
-            description = st.text_input("Description (e.g. Dinner, Taxi)")
-            amount = st.number_input(f"Total amount ({symbol})", min_value=0.01, step=0.01, format="%.2f")
-            paid_by_name = st.selectbox("Paid by", [m["name"] for m in members])
+if editing_id:
+    st.info("Save or cancel the edit below before adding a new expense.")
+else:
+    with st.expander("Add new expense", expanded=False):
+        if len(members) < 2:
+            st.warning("This group needs at least 2 members.")
+        else:
+            with st.form("add_expense_form", clear_on_submit=True):
+                description = st.text_input("Description (e.g. Dinner, Taxi)")
+                amount = st.number_input(f"Total amount ({symbol})", min_value=0.01, step=0.01, format="%.2f")
+                paid_by_name = st.selectbox("Paid by", [m["name"] for m in members])
 
-            st.markdown("**Split between:**")
-            member_selected = {}
-            cols = st.columns(min(len(members), 4))
-            for i, member in enumerate(members):
-                with cols[i % len(cols)]:
-                    member_selected[member["name"]] = st.checkbox(member["name"], value=True)
+                st.markdown("**Split between:**")
+                member_selected = {}
+                cols = st.columns(min(len(members), 4))
+                for i, member in enumerate(members):
+                    with cols[i % len(cols)]:
+                        member_selected[member["name"]] = st.checkbox(member["name"], value=True)
 
-            if st.form_submit_button("Add Expense"):
-                if not description.strip():
-                    st.warning("Please enter a description.")
-                else:
-                    splitting_names = [n for n, checked in member_selected.items() if checked]
-                    if not splitting_names:
-                        st.warning("Select at least one person to split with.")
+                if st.form_submit_button("Add Expense"):
+                    if not description.strip():
+                        st.warning("Please enter a description.")
                     else:
-                        split_count = len(splitting_names)
-                        per_person = round(amount / split_count, 2)
-                        splits = {name_to_id[n]: per_person for n in splitting_names}
-                        splits[name_to_id[splitting_names[0]]] += round(amount - per_person * split_count, 2)
-                        add_expense(group["id"], description.strip(), amount, name_to_id[paid_by_name], splits)
-                        st.success(f"Added '{description.strip()}' — {amount:.2f} {symbol}")
-                        st.rerun()
+                        splitting_names = [n for n, checked in member_selected.items() if checked]
+                        if not splitting_names:
+                            st.warning("Select at least one person to split with.")
+                        else:
+                            split_count = len(splitting_names)
+                            per_person = round(amount / split_count, 2)
+                            splits = {name_to_id[n]: per_person for n in splitting_names}
+                            splits[name_to_id[splitting_names[0]]] += round(amount - per_person * split_count, 2)
+                            add_expense(group["id"], description.strip(), amount, name_to_id[paid_by_name], splits)
+                            st.success(f"Added '{description.strip()}' — {fmt(amount)}")
+                            st.rerun()
 
 # ── Expense List ───────────────────────────────────────────────────────────────
-st.subheader("Expenses")
 expenses = get_group_expenses(group["id"])
 
 if not expenses:
+    st.subheader("Expenses")
     st.info("No expenses yet — add one above.")
 else:
-    editing_id = st.session_state.get("editing_expense_id")
+    total = sum(e["amount"] for e in expenses)
+    settled_count = sum(1 for e in expenses if e["settled"])
+    st.subheader(f"Expenses  ·  {fmt(total)} total  ·  {settled_count} settled")
 
     for exp in expenses:
         is_settled = bool(exp["settled"])
@@ -129,16 +137,17 @@ else:
             # ── Normal expense row ─────────────────────────────────────────────
             col_main, col_settle, col_edit, col_del = st.columns([5, 1, 1, 1])
             with col_main:
-                opacity = "0.4" if is_settled else "1"
                 decoration = "line-through" if is_settled else "none"
+                text_opacity = "0.45" if is_settled else "1"
                 av = avatar_html(exp["paid_by_name"], payer.get("color", DEFAULT_COLOR), payer.get("pfp"), size=26)
                 st.markdown(
-                    f'<div style="display:flex;align-items:center;gap:8px;opacity:{opacity};text-decoration:{decoration}">'
+                    f'<div style="display:flex;align-items:center;gap:8px">'
                     f'{av}'
-                    f'<div><strong>{exp["description"]}</strong> — {exp["amount"]:.2f} {symbol} '
+                    f'<div style="opacity:{text_opacity};text-decoration:{decoration}">'
+                    f'<strong>{exp["description"]}</strong> — {fmt(exp["amount"])} '
                     f'paid by {exp["paid_by_name"]}<br>'
-                    f'<small style="color:gray">{exp["created_at"]}</small></div>'
-                    f'</div>',
+                    f'<small style="color:gray">{fmt_dt(exp["created_at"])}</small>'
+                    f'</div></div>',
                     unsafe_allow_html=True,
                 )
             with col_settle:
@@ -151,7 +160,7 @@ else:
                     st.session_state.editing_expense_id = exp["id"]
                     st.rerun()
             with col_del:
-                if st.button("Del", key=f"del_{exp['id']}", type="secondary"):
+                if st.button("Delete", key=f"del_{exp['id']}", type="secondary"):
                     delete_expense(exp["id"])
                     st.rerun()
 
@@ -173,7 +182,7 @@ else:
         st.markdown(
             f'<div style="display:flex;align-items:center;gap:8px;margin:6px 0">'
             f'{chip_d}<span>owes</span>{chip_c}'
-            f'<code style="margin-left:4px">{b["amount"]:.2f} {symbol}</code>'
+            f'<code style="margin-left:4px">{fmt(b["amount"])}</code>'
             f'</div>',
             unsafe_allow_html=True,
         )
