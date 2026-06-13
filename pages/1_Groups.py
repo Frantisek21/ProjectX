@@ -1,6 +1,9 @@
 import streamlit as st
-from db import init_db, add_person, create_group, get_all_people, get_all_groups, get_group_members, get_all_people_map
-from utils import show_sidebar, apply_theme, avatar_html, DEFAULT_COLOR
+from db import (
+    init_db, add_person, create_group, get_all_people,
+    get_all_groups, get_group_members, get_all_people_map, delete_group,
+)
+from utils import show_sidebar, apply_theme, person_chip, DEFAULT_COLOR
 
 init_db()
 
@@ -9,12 +12,11 @@ info = show_sidebar()
 apply_theme(info["color"])
 st.title("Groups")
 
-# --- Add a person ---
+# ── Add a person ───────────────────────────────────────────────────────────────
 st.subheader("Add a Person")
 with st.form("add_person_form", clear_on_submit=True):
     new_name = st.text_input("Name")
-    submitted = st.form_submit_button("Add Person")
-    if submitted:
+    if st.form_submit_button("Add Person"):
         if new_name.strip():
             try:
                 add_person(new_name.strip())
@@ -27,7 +29,7 @@ with st.form("add_person_form", clear_on_submit=True):
 
 st.divider()
 
-# --- Create a group ---
+# ── Create a group ─────────────────────────────────────────────────────────────
 st.subheader("Create a Group")
 people = get_all_people()
 
@@ -41,22 +43,20 @@ else:
             options=[p["name"] for p in people],
             default=[p["name"] for p in people],
         )
-        submitted = st.form_submit_button("Create Group")
-        if submitted:
+        if st.form_submit_button("Create Group"):
             if not group_name.strip():
                 st.warning("Please enter a group name.")
             elif len(selected) < 2:
                 st.warning("Select at least 2 members.")
             else:
                 name_to_id = {p["name"]: p["id"] for p in people}
-                member_ids = [name_to_id[n] for n in selected]
-                create_group(group_name.strip(), member_ids)
+                create_group(group_name.strip(), [name_to_id[n] for n in selected])
                 st.success(f"Group '{group_name.strip()}' created!")
                 st.rerun()
 
 st.divider()
 
-# --- Existing groups ---
+# ── Existing groups ────────────────────────────────────────────────────────────
 st.subheader("Existing Groups")
 groups = get_all_groups()
 
@@ -64,17 +64,48 @@ if not groups:
     st.info("No groups yet.")
 else:
     people_map = get_all_people_map()
+    confirm_id = st.session_state.get("confirm_delete_group")
+
     for group in groups:
         members = get_group_members(group["id"])
-        st.markdown(f"**{group['name']}**")
+
+        col_name, col_del = st.columns([5, 1])
+        with col_name:
+            st.markdown(f"**{group['name']}**")
+        with col_del:
+            if confirm_id == group["id"]:
+                pass  # buttons shown below
+            else:
+                if st.button("Delete", key=f"del_grp_{group['id']}", type="secondary"):
+                    st.session_state.confirm_delete_group = group["id"]
+                    st.rerun()
+
         if members:
-            row = " &nbsp; ".join(
-                avatar_html(m["name"], people_map.get(m["id"], {}).get("color", DEFAULT_COLOR),
-                            people_map.get(m["id"], {}).get("pfp"), size=26)
-                + f" {m['name']}"
+            chips = "&nbsp;&nbsp;".join(
+                person_chip(m["name"], people_map.get(m["id"], {}).get("color", DEFAULT_COLOR),
+                            people_map.get(m["id"], {}).get("pfp"), size=24)
                 for m in members
             )
-            st.markdown(row, unsafe_allow_html=True)
+            st.markdown(
+                f'<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:4px">{chips}</div>',
+                unsafe_allow_html=True,
+            )
         else:
             st.caption("No members")
-        st.markdown("")
+
+        if confirm_id == group["id"]:
+            st.warning(f"Delete **{group['name']}**? This will permanently remove all its expenses.")
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("Confirm Delete", key=f"confirm_del_{group['id']}"):
+                    if st.session_state.get("active_group_id") == group["id"]:
+                        st.session_state.pop("active_group_id", None)
+                    delete_group(group["id"])
+                    st.session_state.confirm_delete_group = None
+                    st.rerun()
+            with c2:
+                if st.button("Cancel", key=f"cancel_del_{group['id']}"):
+                    st.session_state.confirm_delete_group = None
+                    st.rerun()
+
+        st.markdown("---")

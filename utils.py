@@ -7,14 +7,22 @@ DEFAULT_COLOR = "#4A90D9"
 
 def avatar_html(name: str, color: str = DEFAULT_COLOR, pfp_b64: str = None, size: int = 30) -> str:
     initials = "".join(w[0].upper() for w in name.split()[:2])
-    style = f"width:{size}px;height:{size}px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:6px"
+    base = f"width:{size}px;height:{size}px;border-radius:50%;flex-shrink:0;"
     if pfp_b64:
-        return f'<img src="data:image/png;base64,{pfp_b64}" style="{style}">'
+        return f'<img src="data:image/png;base64,{pfp_b64}" style="{base}object-fit:cover;">'
     bg = color or DEFAULT_COLOR
     return (
-        f'<span style="{style};background:{bg};display:inline-flex;align-items:center;'
+        f'<span style="{base}background:{bg};display:inline-flex;align-items:center;'
         f'justify-content:center;color:white;font-weight:bold;font-size:{size // 2 - 1}px">'
         f'{initials}</span>'
+    )
+
+
+def person_chip(name: str, color: str = DEFAULT_COLOR, pfp_b64: str = None, size: int = 28) -> str:
+    av = avatar_html(name, color, pfp_b64, size)
+    return (
+        f'<span style="display:inline-flex;align-items:center;gap:6px;vertical-align:middle">'
+        f'{av}<span>{name}</span></span>'
     )
 
 CURRENCIES = ["CZK", "EUR", "USD", "GBP", "PLN"]

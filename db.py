@@ -182,6 +182,48 @@ def set_expense_settled(expense_id: int, settled: bool):
         conn.execute("UPDATE expenses SET settled = ? WHERE id = ?", (1 if settled else 0, expense_id))
 
 
+def get_expense_splits(expense_id: int) -> set:
+    with get_conn() as conn:
+        rows = conn.execute("SELECT person_id FROM expense_splits WHERE expense_id = ?", (expense_id,)).fetchall()
+    return {r["person_id"] for r in rows}
+
+
+def update_expense(expense_id: int, description: str, amount: float, paid_by_id: int, splits: dict):
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE expenses SET description = ?, amount = ?, paid_by_id = ? WHERE id = ?",
+            (description, amount, paid_by_id, expense_id),
+        )
+        conn.execute("DELETE FROM expense_splits WHERE expense_id = ?", (expense_id,))
+        conn.executemany(
+            "INSERT INTO expense_splits (expense_id, person_id, amount) VALUES (?, ?, ?)",
+            [(expense_id, pid, amt) for pid, amt in splits.items()],
+        )
+
+
+def delete_expense(expense_id: int):
+    with get_conn() as conn:
+        conn.execute("DELETE FROM expense_splits WHERE expense_id = ?", (expense_id,))
+        conn.execute("DELETE FROM expenses WHERE id = ?", (expense_id,))
+
+
+def delete_group(group_id: int):
+    with get_conn() as conn:
+        expense_ids = [
+            r["id"] for r in conn.execute(
+                "SELECT id FROM expenses WHERE group_id = ?", (group_id,)
+            ).fetchall()
+        ]
+        if expense_ids:
+            conn.executemany(
+                "DELETE FROM expense_splits WHERE expense_id = ?",
+                [(eid,) for eid in expense_ids],
+            )
+        conn.execute("DELETE FROM expenses WHERE group_id = ?", (group_id,))
+        conn.execute("DELETE FROM group_members WHERE group_id = ?", (group_id,))
+        conn.execute("DELETE FROM groups WHERE id = ?", (group_id,))
+
+
 # --- Balances ---
 
 def get_balances(group_id: int):
