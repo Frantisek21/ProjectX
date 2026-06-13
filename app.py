@@ -5,8 +5,8 @@ from utils import show_sidebar, apply_theme
 init_db()
 
 st.set_page_config(page_title="SplitEasy", page_icon="💸", layout="centered")
-color = show_sidebar()
-apply_theme(color)
+info = show_sidebar()
+apply_theme(info["color"])
 
 st.title("SplitEasy")
 st.caption("Track shared expenses and settle up easily.")

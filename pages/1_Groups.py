@@ -5,8 +5,8 @@ from utils import show_sidebar, apply_theme
 init_db()
 
 st.set_page_config(page_title="Groups", page_icon="👥")
-color = show_sidebar()
-apply_theme(color)
+info = show_sidebar()
+apply_theme(info["color"])
 st.title("Groups")
 
 # --- Add a person ---

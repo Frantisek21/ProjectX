@@ -48,10 +48,17 @@ def init_db():
                 amount     REAL NOT NULL
             );
         """)
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS settings (
+                key   TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
+        """)
         # Safe migrations for databases created before these columns existed
         for migration in [
             "ALTER TABLE people ADD COLUMN color TEXT DEFAULT '#4A90D9'",
             "ALTER TABLE people ADD COLUMN pfp TEXT",
+            "ALTER TABLE expenses ADD COLUMN settled INTEGER DEFAULT 0",
         ]:
             try:
                 conn.execute(migration)
@@ -75,6 +82,20 @@ def get_all_people():
 def get_person(person_id: int):
     with get_conn() as conn:
         return conn.execute("SELECT * FROM people WHERE id = ?", (person_id,)).fetchone()
+
+
+def get_setting(key: str, default: str = "") -> str:
+    with get_conn() as conn:
+        row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        return row["value"] if row else default
+
+
+def set_setting(key: str, value: str):
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, value),
+        )
 
 
 def update_person_profile(person_id: int, color: str, pfp_b64: str | None):
@@ -150,6 +171,11 @@ def get_group_expenses(group_id: int):
         """, (group_id,)).fetchall()
 
 
+def set_expense_settled(expense_id: int, settled: bool):
+    with get_conn() as conn:
+        conn.execute("UPDATE expenses SET settled = ? WHERE id = ?", (1 if settled else 0, expense_id))
+
+
 # --- Balances ---
 
 def get_balances(group_id: int):
@@ -158,7 +184,7 @@ def get_balances(group_id: int):
             SELECT e.paid_by_id, es.person_id, es.amount
             FROM expense_splits es
             JOIN expenses e ON e.id = es.expense_id
-            WHERE e.group_id = ?
+            WHERE e.group_id = ? AND e.settled = 0
         """, (group_id,)).fetchall()
 
     # owes[debtor_id][creditor_id] += amount
